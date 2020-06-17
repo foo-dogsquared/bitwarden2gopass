@@ -1,0 +1,32 @@
+= bitwarden2gopass
+
+A simple migration script from https://bitwarden.com/[Bitwarden] to https://github.com/gopasspw/gopass[gopass].
+It will only import the login vault items to `$PASSWORD_STORE_DIR/websites/`.
+
+If you want to create for pass, simply modify the script for your needs.
+
+Just `git clone <URL>` this Git repo somewhere and plop the script somewhere in your `$PATH`.
+To use it, just go `bitwarden2gopass <BITWARDEN_CSV_PATH>`.
+
+
+
+
+== Examples
+
+[source, shell]
+----
+bitwarden2gopass ~/Downloads/bitwarden_export_20200617020218.csv
+----
+
+The format in the resulting password store directory (assuming it's empty before the migration) is of the following:
+
+[source, tree]
+----
+/home/foo-dogsquared/.password-store/
+└── websites/
+    ├── <LOGIN_URL_1>
+    │   ├── <LOGIN_USERNAME_1>.gpg
+    │   └── <LOGIN_USERNAME_2>.gpg
+    └── <LOGIN_URL_2>
+        └── <LOGIN_USERNAME_3>.gpg
+----

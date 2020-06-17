@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+
+# Minimum required Python version: v3.6(?)
+
+# This script imports from Bitwarden CSV exports to gopass.
+# It only looks for the login vault items from the export.
+# Furthermore, each of the import will be inserted at `$PASSWORD_STORE_DIR/<folder>/<name>.gpg` in (naive) kebab-case.
+# (HINT: Look at the exported CSV data for the reference above.
+#        Also, it should be easy to modify this script to use only pass.)
+#
+# Despite being a pass script, I mostly assume you're using gopass (because it's better).
+
+import argparse
+import csv
+import logging
+import os
+import os.path
+from pathlib import Path
+import re
+from subprocess import Popen, PIPE
+import sys
+import textwrap
+import urllib.parse
+
+
+def parse_args(args):
+    """
+    Parse the arguments and do its thing.
+
+    :param: parser - The 'argparse.ArgumentParser' object.
+    :param: args - The arguments (e.g., passed from the shell).
+    """
+    parser = argparse.ArgumentParser(prog='bitwarden2pass', description='Imports Bitwarden CSV exports to pass.')
+
+    parser.add_argument("csv_file", help='The CSV file to be imported.', metavar='FILE')
+    parser.add_argument("--force", "-f", help="Override the password entry if it already exists. (Recommended to enable this only if you're sure.)", action="store_true")
+
+    args = parser.parse_args(args)
+
+    return args
+
+
+class Record:
+    """
+    Representing the record of each Bitwarden vault item.
+    Only accepts login items from the vault.
+    """
+    password_dir = Path(os.getenv("PASSWORD_STORE_DIR", "~/.password-store"))
+
+    def __init__(self, row):
+        kind = row[2]
+        if kind != "login":
+            raise ValueError("Given item is not a login type.")
+
+        self.folder = row[0]
+        self.name = row[3]
+        self.login_uri = row[6]
+        self.login_username = row[7]
+        self.login_password = row[8]
+        # The one-time password (OTP) auth key.
+        self.login_totp = row[9]
+
+
+    @property
+    def fullname(self):
+        """
+        Returns the relative location of the record.
+
+        :returns: pathlib.Path
+        """
+        # Convert the name into similar casing to 'gopass create' items.
+        name = re.sub("\s", "_", re.sub("[^a-zA-Z0-9-_ @.]", "", self.login_username))
+        uri = urllib.parse.urlparse(self.login_uri)
+        return Path("websites") / (uri.hostname if uri.hostname else (uri.netloc if uri.netloc else uri.path)) / name
+   
+
+    @property
+    def location(self):
+        """
+        Returns the full location of the password store.
+
+        :returns: pathlib.Path
+        """
+        return self.password_dir / self.fullname
+
+
+    def insert_to_pass(self, force=False):
+        """
+        Import new password entry to password-store using pass insert command.
+        """
+        cmd = ['gopass', 'insert', '--multiline']
+        if force:
+            cmd.append("--force")
+
+        cmd.append(self.fullname)
+
+        proc = Popen(cmd, stdin=PIPE, stdout=PIPE)
+        proc.communicate(textwrap.dedent(f"""\
+        {self.login_password}
+        comment:
+        url: {self.login_uri}
+        username: {self.login_username}
+        """).encode("utf8"))
+        return proc.wait()
+
+
+
+if __name__ == "__main__":
+    logging.basicConfig(format="[%(levelname)s] %(module)s: %(message)s", level=logging.INFO, stream=sys.stdout)
+
+    args = parse_args(sys.argv[1:])
+
+    with open(args.csv_file) as csv_file:
+        total_bookmarks_count = 0
+        csv_reader = csv.reader(csv_file)
+        for row in csv_reader:
+            try:
+                record = Record(row)
+
+                location = Path(os.path.expanduser(record.location)).with_suffix(".gpg")
+                if location.exists():
+                    logging.error(f"{record.name} in {record.location}.gpg already exists.")
+                    continue
+
+                if record.insert_to_pass(force=args.force) == 0:
+                    logging.info(f"{record.name} has been imported to {record.location}.gpg.")
+                    total_bookmarks_count += 1
+                else:
+                    logging.error(f"{record.name} has encountered some problems while passing to pass.")
+            except ValueError:
+                continue
+
+        print(f"{total_bookmarks_count} bookmarks successfully imported.")
