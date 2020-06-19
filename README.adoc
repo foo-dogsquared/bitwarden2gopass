@@ -5,8 +5,26 @@ It will only import the login vault items to `$PASSWORD_STORE_DIR/websites/`.
 
 If you want to create for pass, simply modify the script for your needs.
 
-Just `git clone <URL>` this Git repo somewhere and plop the script somewhere in your `$PATH`.
-To use it, just go `bitwarden2gopass <BITWARDEN_CSV_PATH>`.
+
+
+
+
+
+
+== Installation
+
+[source, shell]
+----
+# Clone this Git repo.
+git clone <URL>
+
+# Make the script executable.
+cd ./bitwarden2gopass/
+chmod +x bitwarden2gopass
+
+# Move the script somewhere in your $PATH.
+mv bitwarden2gopass ~/.local/bin
+----
 
 
 
